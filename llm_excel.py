@@ -12,7 +12,7 @@ if 'HUGGINGFACEHUB_API_TOKEN' not in st.secrets:
 @st.cache_resource
 def load_model():
     return HuggingFaceHub(
-        repo_id="google/flan-t5-xl",
+        repo_id="google/flan-t5-base",
         model_kwargs={"temperature": 0.5, "max_length": 512},
         huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
     )
