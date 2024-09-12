@@ -1,18 +1,15 @@
 import streamlit as st
 import pandas as pd
 import io
-from transformers import AutoTokenizer, AutoModelForCausalLM
-import torch
+import requests
 
-# Initialize the model and tokenizer
-@st.cache_resource
-def load_model():
-    model_name = "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
-    return model, tokenizer
+# Hugging Face API setup
+API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-70b-chat-hf"
+headers = {"Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}"}
 
-model, tokenizer = load_model()
+def query(payload):
+    response = requests.post(API_URL, headers=headers, json=payload)
+    return response.json()
 
 st.title("LLM Data Analysis Assistant")
 
@@ -57,12 +54,13 @@ if st.session_state.df is not None:
 
             # Generate response from the LLM
             with st.spinner('Analyzing...'):
-                inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-                outputs = model.generate(**inputs, max_new_tokens=500)
-                response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+                output = query({
+                    "inputs": prompt,
+                    "parameters": {"max_new_tokens": 500}
+                })
             
             st.write("Analysis Result:")
-            st.write(response)
+            st.write(output[0]['generated_text'])
         else:
             st.warning("Please enter a question about the data.")
 
@@ -73,10 +71,11 @@ chat_input = st.sidebar.text_input("Ask a general question:", key="chat_input")
 if st.sidebar.button("Send", key="chat_button"):
     if chat_input:
         with st.sidebar.spinner('Thinking...'):
-            inputs = tokenizer(f"Human: {chat_input}\n\nAssistant:", return_tensors="pt").to(model.device)
-            outputs = model.generate(**inputs, max_new_tokens=500)
-            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
+            output = query({
+                "inputs": f"Human: {chat_input}\n\nAssistant:",
+                "parameters": {"max_new_tokens": 500}
+            })
         st.sidebar.write("LLM Response:")
-        st.sidebar.write(response)
+        st.sidebar.write(output[0]['generated_text'])
     else:
         st.sidebar.warning("Please enter a question.")
