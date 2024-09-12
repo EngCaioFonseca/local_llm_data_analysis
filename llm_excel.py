@@ -5,6 +5,12 @@ import requests
 
 # Hugging Face API setup
 API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-70b-chat-hf"
+
+# Check if the API key is set
+if 'HUGGINGFACE_API_KEY' not in st.secrets:
+    st.error("HUGGINGFACE_API_KEY is not set in the Streamlit secrets. Please set it up as described in the README.")
+    st.stop()
+
 headers = {"Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}"}
 
 def query(payload):
