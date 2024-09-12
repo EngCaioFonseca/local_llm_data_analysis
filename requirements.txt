@@ -1,7 +1,6 @@
 streamlit
 pandas
 openpyxl
-langchain
-langchain-community
-ollama
+transformers
+torch
 
