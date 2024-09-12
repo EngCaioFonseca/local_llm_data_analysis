@@ -1,21 +1,18 @@
 import streamlit as st
 import pandas as pd
 import io
-from langchain.llms import Ollama
-from langchain.callbacks.manager import CallbackManager
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 
-# Initialize the Ollama model
+# Initialize the model and tokenizer
 @st.cache_resource
 def load_model():
-    return Ollama(
-        model="llama2:3.1",
-        callback_manager=CallbackManager([StreamingStdOutCallbackHandler()]),
-    )
+    model_name = "meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map="auto")
+    return model, tokenizer
 
-llm = load_model()
+model, tokenizer = load_model()
 
 st.title("LLM Data Analysis Assistant")
 
@@ -55,18 +52,14 @@ if st.session_state.df is not None:
             context += f"Data types:\n{st.session_state.df.dtypes.to_string()}\n"
             context += f"Summary statistics:\n{st.session_state.df.describe().to_string()}\n"
 
-            # Create a prompt template
-            prompt_template = PromptTemplate(
-                input_variables=["context", "question"],
-                template="Based on the following information about a dataset:\n{context}\n\nPlease answer the following question: {question}\n\nAnswer:",
-            )
-
-            # Create an LLMChain
-            chain = LLMChain(llm=llm, prompt=prompt_template)
+            # Create the prompt
+            prompt = f"Based on the following information about a dataset:\n{context}\n\nPlease answer the following question: {user_input}\n\nAnswer:"
 
             # Generate response from the LLM
             with st.spinner('Analyzing...'):
-                response = chain.run(context=context, question=user_input)
+                inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+                outputs = model.generate(**inputs, max_new_tokens=500)
+                response = tokenizer.decode(outputs[0], skip_special_tokens=True)
             
             st.write("Analysis Result:")
             st.write(response)
@@ -79,13 +72,10 @@ chat_input = st.sidebar.text_input("Ask a general question:", key="chat_input")
 
 if st.sidebar.button("Send", key="chat_button"):
     if chat_input:
-        chat_prompt = PromptTemplate(
-            input_variables=["question"],
-            template="Human: {question}\n\nAssistant:",
-        )
-        chat_chain = LLMChain(llm=llm, prompt=chat_prompt)
         with st.sidebar.spinner('Thinking...'):
-            response = chat_chain.run(question=chat_input)
+            inputs = tokenizer(f"Human: {chat_input}\n\nAssistant:", return_tensors="pt").to(model.device)
+            outputs = model.generate(**inputs, max_new_tokens=500)
+            response = tokenizer.decode(outputs[0], skip_special_tokens=True)
         st.sidebar.write("LLM Response:")
         st.sidebar.write(response)
     else:
