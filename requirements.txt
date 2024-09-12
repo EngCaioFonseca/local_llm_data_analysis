@@ -1,0 +1,7 @@
+python3.7+
+streamlit
+pandas
+openpyxl
+langchain
+ollama (with llama3.1)
+
