@@ -55,18 +55,26 @@ if st.session_state.df is not None:
             context += f"Data types:\n{st.session_state.df.dtypes.to_string()}\n"
             context += f"Summary statistics:\n{st.session_state.df.describe().to_string()}\n"
 
-            # Create the prompt
+        # Create the prompt
             prompt = f"Based on the following information about a dataset:\n{context}\n\nPlease answer the following question: {user_input}\n\nAnswer:"
 
             # Generate response from the LLM
             with st.spinner('Analyzing...'):
-                output = query({
-                    "inputs": prompt,
-                    "parameters": {"max_new_tokens": 500}
-                })
-            
-            st.write("Analysis Result:")
-            st.write(output[0]['generated_text'])
+                try:
+                    output = query({
+                        "inputs": prompt,
+                        "parameters": {"max_new_tokens": 500}
+                    })
+                
+                    st.write("Analysis Result:")
+                    if isinstance(output, list) and len(output) > 0 and 'generated_text' in output[0]:
+                        st.write(output[0]['generated_text'])
+                    elif isinstance(output, dict) and 'generated_text' in output:
+                        st.write(output['generated_text'])
+                    else:
+                        st.write(str(output))  # Fallback: write the raw output
+                except Exception as e:
+                    st.error(f"An error occurred: {str(e)}")
         else:
             st.warning("Please enter a question about the data.")
 
@@ -77,11 +85,19 @@ chat_input = st.sidebar.text_input("Ask a general question:", key="chat_input")
 if st.sidebar.button("Send", key="chat_button"):
     if chat_input:
         with st.sidebar.spinner('Thinking...'):
-            output = query({
-                "inputs": f"Human: {chat_input}\n\nAssistant:",
-                "parameters": {"max_new_tokens": 500}
-            })
-        st.sidebar.write("LLM Response:")
-        st.sidebar.write(output[0]['generated_text'])
+            try:
+                output = query({
+                    "inputs": f"Human: {chat_input}\n\nAssistant:",
+                    "parameters": {"max_new_tokens": 500}
+                })
+                st.sidebar.write("LLM Response:")
+                if isinstance(output, list) and len(output) > 0 and 'generated_text' in output[0]:
+                    st.sidebar.write(output[0]['generated_text'])
+                elif isinstance(output, dict) and 'generated_text' in output:
+                    st.sidebar.write(output['generated_text'])
+                else:
+                    st.sidebar.write(str(output))  # Fallback: write the raw output
+            except Exception as e:
+                st.sidebar.error(f"An error occurred: {str(e)}")
     else:
         st.sidebar.warning("Please enter a question.")
