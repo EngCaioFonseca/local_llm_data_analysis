@@ -1,21 +1,23 @@
 import streamlit as st
 import pandas as pd
 import io
-import requests
+from langchain import HuggingFaceHub, PromptTemplate, LLMChain
 
 # Hugging Face API setup
-API_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-2-7b-chat-hf"
-
-# Check if the API key is set
-if 'HUGGINGFACE_API_KEY' not in st.secrets:
-    st.error("HUGGINGFACE_API_KEY is not set in the Streamlit secrets. Please set it up as described in the README.")
+if 'HUGGINGFACEHUB_API_TOKEN' not in st.secrets:
+    st.error("HUGGINGFACEHUB_API_TOKEN is not set in the Streamlit secrets. Please set it up as described in the README.")
     st.stop()
 
-headers = {"Authorization": f"Bearer {st.secrets['HUGGINGFACE_API_KEY']}"}
+# Initialize the model
+@st.cache_resource
+def load_model():
+    return HuggingFaceHub(
+        repo_id="google/flan-t5-xl",
+        model_kwargs={"temperature": 0.5, "max_length": 512},
+        huggingfacehub_api_token=st.secrets["HUGGINGFACEHUB_API_TOKEN"]
+    )
 
-def query(payload):
-    response = requests.post(API_URL, headers=headers, json=payload)
-    return response.json()
+llm = load_model()
 
 st.title("LLM Data Analysis Assistant")
 
@@ -55,24 +57,21 @@ if st.session_state.df is not None:
             context += f"Data types:\n{st.session_state.df.dtypes.to_string()}\n"
             context += f"Summary statistics:\n{st.session_state.df.describe().to_string()}\n"
 
-        # Create the prompt
-            prompt = f"Based on the following information about a dataset:\n{context}\n\nPlease answer the following question: {user_input}\n\nAnswer:"
+            # Create the prompt template
+            prompt_template = PromptTemplate(
+                input_variables=["context", "question"],
+                template="Based on the following information about a dataset:\n{context}\n\nPlease answer the following question: {question}\n\nAnswer:"
+            )
+
+            # Create the LLMChain
+            chain = LLMChain(llm=llm, prompt=prompt_template)
 
             # Generate response from the LLM
             with st.spinner('Analyzing...'):
                 try:
-                    output = query({
-                        "inputs": prompt,
-                        "parameters": {"max_new_tokens": 500}
-                    })
-                
+                    response = chain.run(context=context, question=user_input)
                     st.write("Analysis Result:")
-                    if isinstance(output, list) and len(output) > 0 and 'generated_text' in output[0]:
-                        st.write(output[0]['generated_text'])
-                    elif isinstance(output, dict) and 'generated_text' in output:
-                        st.write(output['generated_text'])
-                    else:
-                        st.write(str(output))  # Fallback: write the raw output
+                    st.write(response)
                 except Exception as e:
                     st.error(f"An error occurred: {str(e)}")
         else:
@@ -86,17 +85,14 @@ if st.sidebar.button("Send", key="chat_button"):
     if chat_input:
         with st.sidebar.spinner('Thinking...'):
             try:
-                output = query({
-                    "inputs": f"Human: {chat_input}\n\nAssistant:",
-                    "parameters": {"max_new_tokens": 500}
-                })
+                chat_prompt = PromptTemplate(
+                    input_variables=["question"],
+                    template="Human: {question}\n\nAssistant:"
+                )
+                chat_chain = LLMChain(llm=llm, prompt=chat_prompt)
+                response = chat_chain.run(question=chat_input)
                 st.sidebar.write("LLM Response:")
-                if isinstance(output, list) and len(output) > 0 and 'generated_text' in output[0]:
-                    st.sidebar.write(output[0]['generated_text'])
-                elif isinstance(output, dict) and 'generated_text' in output:
-                    st.sidebar.write(output['generated_text'])
-                else:
-                    st.sidebar.write(str(output))  # Fallback: write the raw output
+                st.sidebar.write(response)
             except Exception as e:
                 st.sidebar.error(f"An error occurred: {str(e)}")
     else:
